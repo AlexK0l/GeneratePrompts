@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prompt Critique MVP</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Node.js + OpenAI Responses API + Speech-to-Text</p>
+          <h1>Генерация, критика и улучшение промптов из текста и голосовых заметок</h1>
+          <p class="hero-copy">
+            Загрузите мысль в свободной форме, а система сама соберёт первый промпт,
+            раскритикует его и вернёт улучшенную финальную версию.
+          </p>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="card input-card">
+          <h2>1. Исходные данные</h2>
+
+          <label class="field">
+            <span>Текстовая заметка</span>
+            <textarea
+              id="noteText"
+              rows="8"
+              placeholder="Например: мне нужен промпт для LLM, который поможет собрать PRD для SaaS-продукта для малых команд..."
+            ></textarea>
+          </label>
+
+          <div class="voice-panel">
+            <div class="voice-header">
+              <div>
+                <h3>Голосовая заметка</h3>
+                <p>
+                  Запишите голос прямо в браузере. После остановки запись автоматически уйдёт на серверную транскрибацию.
+                </p>
+              </div>
+              <span id="recordingBadge" class="badge">Не записывается</span>
+            </div>
+
+            <div class="voice-actions">
+              <button id="startRecordingBtn" class="btn btn-primary" type="button">Начать запись</button>
+              <button id="stopRecordingBtn" class="btn btn-secondary" type="button" disabled>Остановить запись</button>
+            </div>
+
+            <audio id="audioPreview" controls class="audio-preview hidden"></audio>
+
+            <label class="field">
+              <span>Распознанный текст из аудио</span>
+              <textarea
+                id="transcriptText"
+                rows="6"
+                placeholder="После транскрибации здесь появится текст. Его можно вручную поправить перед запуском пайплайна."
+              ></textarea>
+            </label>
+          </div>
+
+          <div class="action-row">
+            <button id="runPipelineBtn" class="btn btn-accent" type="button">Сгенерировать -> раскритиковать -> улучшить</button>
+            <button id="resetBtn" class="btn btn-ghost" type="button">Сбросить</button>
+          </div>
+
+          <div id="statusBox" class="status-box muted">Система готова к работе.</div>
+        </section>
+
+        <section class="card results-card">
+          <h2>2. Результаты</h2>
+
+          <div class="result-block">
+            <div class="result-title">Исходная заметка</div>
+            <pre id="sourceNoteOutput" class="output">—</pre>
+          </div>
+
+          <div class="result-block">
+            <div class="result-title">Распознанный текст из аудио</div>
+            <pre id="transcriptOutput" class="output">—</pre>
+          </div>
+
+          <div class="result-block">
+            <div class="result-title">Первичный промпт</div>
+            <pre id="initialPromptOutput" class="output">—</pre>
+          </div>
+
+          <div class="result-block">
+            <div class="result-title">Критика</div>
+            <pre id="critiqueOutput" class="output">—</pre>
+          </div>
+
+          <div class="result-block">
+            <div class="result-title">Улучшенный финальный промпт</div>
+            <pre id="finalPromptOutput" class="output">—</pre>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

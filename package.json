@@ -1,0 +1,24 @@
+{
+  "name": "prompt-critique-mvp-openai",
+  "version": "1.0.0",
+  "description": "MVP for turning text and voice notes into reusable prompts with critique and improvement pipeline via OpenAI Responses API.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "nodemon server/index.js",
+    "check": "node --check server/index.js && node --check server/app.js && node --check server/config/env.js && node --check server/config/models.js && node --check server/controllers/promptController.js && node --check server/middleware/errorHandler.js && node --check server/prompts/promptingGuide.js && node --check server/prompts/systemPrompts.js && node --check server/routes/api.js && node --check server/services/openaiResponsesService.js && node --check server/services/noteNormalizerService.js && node --check server/services/promptPipelineService.js && node --check server/services/transcriptionService.js && node --check server/utils/httpError.js && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "multer": "^2.0.2",
+    "openai": "^6.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
