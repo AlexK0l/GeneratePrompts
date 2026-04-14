@@ -12,7 +12,7 @@ async function transcribeAudioController(req, res, next) {
   }
 
   try {
-    const result = await transcribeAudio(file.path, file.mimetype);
+    const result = await transcribeAudio(file.path, file.mimetype, file.originalname);
     return res.json({
       ok: true,
       transcript: result.transcript,

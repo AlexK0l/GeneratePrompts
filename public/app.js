@@ -16,7 +16,7 @@ const els = {
   metaOutput: document.getElementById('metaOutput')
 };
 
-const RAW_API_BASE_URL = window.APP_CONFIG?.API_BASE_URL || '';
+const RAW_API_BASE_URL = String(window.APP_CONFIG?.API_BASE_URL || '').trim();
 const API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
 const PLACEHOLDER_API_URL = 'https://your-backend.onrender.com';
 const HEALTH_CHECK_INTERVAL_MS = 30000;
@@ -24,13 +24,17 @@ const HEALTH_CHECK_TIMEOUT_MS = 8000;
 const PREFERRED_AUDIO_MIME_TYPES = [
   'audio/webm;codecs=opus',
   'audio/webm',
-  'audio/mp4'
+  'audio/ogg;codecs=opus',
+  'audio/ogg',
+  'audio/mp4',
+  'audio/wav'
 ];
 
 let mediaRecorder = null;
 let mediaStream = null;
 let audioChunks = [];
 let recordedBlob = null;
+let currentAudioPreviewUrl = null;
 let healthCheckTimer = null;
 let backendConnectionState = 'checking';
 
@@ -102,18 +106,22 @@ function setBackendStatus(state, text, details) {
   els.backendStatusText.textContent = details;
 }
 
-function ensureApiConfigured() {
-  if (!API_BASE_URL || API_BASE_URL === PLACEHOLDER_API_URL) {
-    throw new Error(
-      'Не настроен frontend -> backend URL. Откройте public/config.js и укажите реальный Render Web Service URL в APP_CONFIG.API_BASE_URL.'
-    );
+function resolveApiBaseUrl() {
+  if (API_BASE_URL && API_BASE_URL !== PLACEHOLDER_API_URL) {
+    return API_BASE_URL;
   }
 
-  return API_BASE_URL;
+  if (window.location?.origin) {
+    return window.location.origin;
+  }
+
+  throw new Error(
+    'Не настроен frontend -> backend URL. Откройте public/config.js и укажите реальный Render Web Service URL в APP_CONFIG.API_BASE_URL.'
+  );
 }
 
 function buildApiUrl(path) {
-  const baseUrl = ensureApiConfigured();
+  const baseUrl = resolveApiBaseUrl();
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${baseUrl}${normalizedPath}`;
 }
@@ -131,40 +139,41 @@ function getFileExtensionByMimeType(mimeType) {
 
   const map = {
     'audio/webm': 'webm',
+    'video/webm': 'webm',
     'audio/wav': 'wav',
     'audio/x-wav': 'wav',
     'audio/mpeg': 'mp3',
     'audio/mp3': 'mp3',
     'audio/mp4': 'mp4',
+    'video/mp4': 'mp4',
     'audio/x-m4a': 'm4a',
-    'audio/m4a': 'm4a'
+    'audio/m4a': 'm4a',
+    'audio/ogg': 'ogg',
+    'audio/oga': 'oga',
+    'audio/flac': 'flac',
+    'audio/x-flac': 'flac',
+    'audio/aac': 'aac'
   };
 
   return map[normalizedMimeType] || 'webm';
 }
 
+async function readJsonSafe(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    return null;
+  }
+}
+
 async function checkBackendConnection(options = {}) {
   const { silent = false } = options;
 
-  if (!API_BASE_URL || API_BASE_URL === PLACEHOLDER_API_URL) {
-    setBackendStatus(
-      'config',
-      'Не настроен',
-      'Укажите реальный URL backend в public/config.js, чтобы frontend мог обращаться к Render Web Service.'
-    );
-
-    if (!silent) {
-      setStatus(
-        'Укажите адрес backend в public/config.js: замените APP_CONFIG.API_BASE_URL на URL вашего Render Web Service.',
-        'error'
-      );
-    }
-
-    return false;
-  }
+  const usingConfiguredUrl = API_BASE_URL && API_BASE_URL !== PLACEHOLDER_API_URL;
+  const resolvedBaseUrl = resolveApiBaseUrl();
 
   if (!silent) {
-    setBackendStatus('checking', 'Проверка...', `Проверяю доступность backend: ${API_BASE_URL}`);
+    setBackendStatus('checking', 'Проверка...', `Проверяю доступность backend: ${resolvedBaseUrl}`);
   }
 
   try {
@@ -173,29 +182,31 @@ async function checkBackendConnection(options = {}) {
       signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS)
     });
 
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch (error) {
-      payload = null;
-    }
+    const payload = await readJsonSafe(response);
 
     if (!response.ok || !payload?.ok) {
       throw new Error(payload?.error?.message || 'Backend ответил с ошибкой на health-check.');
     }
 
-    setBackendStatus('online', 'Онлайн', `Backend доступен: ${API_BASE_URL}`);
+    setBackendStatus('online', 'Онлайн', `Backend доступен: ${resolvedBaseUrl}`);
 
     if (!silent) {
-      setStatus('Связь с backend установлена. Система готова к работе.', 'success');
+      setStatus(
+        usingConfiguredUrl
+          ? 'Связь с backend установлена. Система готова к работе.'
+          : 'Связь с backend установлена. Используется текущий origin сайта.',
+        'success'
+      );
     }
 
     return true;
   } catch (error) {
     setBackendStatus(
-      'offline',
-      'Недоступен',
-      `Не удаётся подключиться к backend: ${API_BASE_URL}. Проверьте Render Web Service, CORS и public/config.js.`
+      usingConfiguredUrl ? 'offline' : 'config',
+      usingConfiguredUrl ? 'Недоступен' : 'Проверьте URL',
+      usingConfiguredUrl
+        ? `Не удаётся подключиться к backend: ${resolvedBaseUrl}. Проверьте Render Web Service, CORS и public/config.js.`
+        : 'Backend по текущему origin недоступен. Укажите явный URL backend в public/config.js, если frontend и backend разнесены.'
     );
 
     if (!silent) {
@@ -217,6 +228,10 @@ function startBackendHealthChecks() {
 }
 
 async function uploadAndTranscribe(blob) {
+  if (!blob || blob.size <= 0) {
+    throw new Error('Записанное аудио пустое. Повторите запись ещё раз.');
+  }
+
   const normalizedMimeType = String(blob.type || 'audio/webm').split(';')[0].trim().toLowerCase();
   const extension = getFileExtensionByMimeType(normalizedMimeType);
   const formData = new FormData();
@@ -229,9 +244,9 @@ async function uploadAndTranscribe(blob) {
     body: formData
   });
 
-  const payload = await response.json();
+  const payload = await readJsonSafe(response);
 
-  if (!response.ok || !payload.ok) {
+  if (!response.ok || !payload?.ok) {
     throw new Error(payload?.error?.message || 'Не удалось транскрибировать аудио.');
   }
 
@@ -268,8 +283,13 @@ async function startRecording() {
     try {
       const recordedMimeType = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
       recordedBlob = new Blob(audioChunks, { type: recordedMimeType });
-      const audioUrl = URL.createObjectURL(recordedBlob);
-      els.audioPreview.src = audioUrl;
+
+      if (currentAudioPreviewUrl) {
+        URL.revokeObjectURL(currentAudioPreviewUrl);
+      }
+
+      currentAudioPreviewUrl = URL.createObjectURL(recordedBlob);
+      els.audioPreview.src = currentAudioPreviewUrl;
       els.audioPreview.classList.remove('hidden');
       await uploadAndTranscribe(recordedBlob);
     } catch (error) {
@@ -278,6 +298,7 @@ async function startRecording() {
     } finally {
       stopTracks();
       setRecordingState(false);
+      mediaRecorder = null;
     }
   });
 
@@ -319,9 +340,9 @@ async function runPipeline() {
     body: JSON.stringify({ noteText, transcriptText })
   });
 
-  const payload = await response.json();
+  const payload = await readJsonSafe(response);
 
-  if (!response.ok || !payload.ok) {
+  if (!response.ok || !payload?.ok) {
     throw new Error(payload?.error?.message || 'Не удалось сгенерировать промпт.');
   }
 
@@ -339,6 +360,12 @@ function resetAll() {
   els.transcriptText.value = '';
   els.audioPreview.removeAttribute('src');
   els.audioPreview.classList.add('hidden');
+
+  if (currentAudioPreviewUrl) {
+    URL.revokeObjectURL(currentAudioPreviewUrl);
+    currentAudioPreviewUrl = null;
+  }
+
   recordedBlob = null;
   audioChunks = [];
   resetOutputs();
@@ -349,7 +376,7 @@ function resetAll() {
     setStatus('Форма очищена. Backend сейчас недоступен.', 'error');
   } else if (backendConnectionState === 'config') {
     setStatus(
-      'Форма очищена. Сначала настройте APP_CONFIG.API_BASE_URL в public/config.js.',
+      'Форма очищена. При необходимости укажите APP_CONFIG.API_BASE_URL в public/config.js.',
       'error'
     );
   } else {

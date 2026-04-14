@@ -13,23 +13,33 @@ Node.js MVP that accepts text notes and voice notes, transcribes audio, and gene
 
 1. Copy `.env.example` to `.env`
 2. Fill in `OPENAI_API_KEY`
-3. For Render Static Site set the backend URL in `public/config.js`
+3. If frontend and backend are split, set the backend URL in `public/config.js`
 4. Run `npm install`
 5. Run `npm run dev`
 6. Open `http://localhost:3000`
+
+## What was fixed
+
+- Added more resilient audio handling for browser recordings.
+- Backend now accepts a wider range of browser MIME types, including `audio/ogg`, `video/webm`, and `video/mp4`.
+- Backend now normalizes browser MIME types and filenames before sending audio to OpenAI.
+- Empty recordings are rejected before upload.
+- Frontend can now work with same-origin backend by default when `API_BASE_URL` is empty.
 
 ## Backend connection status on frontend
 
 The frontend shows a dedicated backend connection indicator in the page header.
 It checks `GET /api/health` on load and then repeats the check every 30 seconds.
 
-Before deploying the static site, update `public/config.js`:
+Before deploying the static site separately, update `public/config.js`:
 
 ```js
 window.APP_CONFIG = {
   API_BASE_URL: 'https://your-backend.onrender.com'
 };
 ```
+
+If frontend and backend live on the same domain, keep `API_BASE_URL` empty.
 
 ## Render deployment (Variant A)
 
@@ -40,15 +50,13 @@ This project is configured for a split deployment:
 
 ### Frontend configuration
 
-Edit `public/config.js` and set your backend URL:
+Edit `public/config.js` and set your backend URL only when frontend and backend are on different origins:
 
 ```js
 window.APP_CONFIG = {
   API_BASE_URL: 'https://your-backend.onrender.com'
 };
 ```
-
-Replace the placeholder with the real public URL of your Render Web Service.
 
 ### Backend configuration
 
@@ -75,4 +83,4 @@ The frontend reads the backend base URL from `public/config.js` and sends reques
 - `${API_BASE_URL}/api/transcribe`
 - `${API_BASE_URL}/api/prompt/pipeline`
 
-If `API_BASE_URL` is left as the placeholder, the UI shows a configuration error instead of silently failing.
+If `API_BASE_URL` is empty, the frontend uses the current site origin.
