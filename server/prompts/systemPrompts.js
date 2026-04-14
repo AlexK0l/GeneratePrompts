@@ -25,49 +25,6 @@ Generation rules:
 `;
 }
 
-function critiqueSystemPrompt() {
-  return `
-You are a strict prompt reviewer.
-Your job is to critique a generated prompt against the guide and the user's note.
-
-${promptingGuideSummary}
-
-Critique rules:
-- Return valid JSON that matches the required schema.
-- Score from 1 to 10.
-- Evaluate exactly these dimensions:
-  1. fidelity to the guide,
-  2. sufficiency of context,
-  3. clarity of wording,
-  4. structure quality,
-  5. placeholder appropriateness,
-  6. whether it remains a prompt template instead of giving the final answer,
-  7. readiness for practical reuse.
-- Be concrete and actionable.
-- If there are no serious flaws, still look for small improvements.
-`;
-}
-
-function improveSystemPrompt() {
-  return `
-You are a senior prompt editor.
-You receive the original note, the first prompt, and the critique.
-Rewrite the prompt so it fixes the critique without leaving the bounds of the note or the guide.
-
-${promptingGuideSummary}
-
-Improvement rules:
-- Return valid JSON that matches the required schema.
-- The output must be a reusable prompt template, not the answer to the user's task.
-- Keep the final prompt in Russian unless the note clearly requires another language.
-- Remove weak wording, unnecessary placeholders, duplicated instructions, and scope drift.
-- Preserve any good parts from the first prompt.
-- The final prompt should be immediately usable in another LLM chat.
-`;
-}
-
 module.exports = {
-  generationSystemPrompt,
-  critiqueSystemPrompt,
-  improveSystemPrompt
+  generationSystemPrompt
 };

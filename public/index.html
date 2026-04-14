@@ -3,19 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Prompt Critique MVP</title>
+    <title>Генератор промпта</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <div class="page">
       <header class="hero">
-        <div>
-          <p class="eyebrow">Node.js + OpenAI Responses API + Speech-to-Text</p>
-          <h1>Генерация, критика и улучшение промптов из текста и голосовых заметок</h1>
-          <p class="hero-copy">
-            Загрузите мысль в свободной форме, а система сама соберёт первый промпт,
-            раскритикует его и вернёт улучшенную финальную версию.
-          </p>
+        <div class="hero-top">
+          <div>
+            <p class="eyebrow">Node.js + OpenAI Responses API + Speech-to-Text</p>
+            <h1>Генератор промпта</h1>
+            <p class="hero-copy">
+              Загрузите мысль в свободной форме, а система соберёт итоговый промпт из текстовой
+              и голосовой заметки по заданной инструкции.
+            </p>
+          </div>
+
+          <aside class="connection-panel" aria-live="polite">
+            <div class="connection-label-row">
+              <span class="connection-label">Связь с backend</span>
+              <span id="backendStatusBadge" class="connection-badge checking">Проверка...</span>
+            </div>
+            <div id="backendStatusText" class="connection-text">
+              Выполняется первичная проверка доступности backend.
+            </div>
+          </aside>
         </div>
       </header>
 
@@ -55,13 +67,13 @@
               <textarea
                 id="transcriptText"
                 rows="6"
-                placeholder="После транскрибации здесь появится текст. Его можно вручную поправить перед запуском пайплайна."
+                placeholder="После транскрибации здесь появится текст. Его можно вручную поправить перед генерацией промпта."
               ></textarea>
             </label>
           </div>
 
           <div class="action-row">
-            <button id="runPipelineBtn" class="btn btn-accent" type="button">Сгенерировать -> раскритиковать -> улучшить</button>
+            <button id="runPipelineBtn" class="btn btn-accent" type="button">Сгенерировать промпт</button>
             <button id="resetBtn" class="btn btn-ghost" type="button">Сбросить</button>
           </div>
 
@@ -82,23 +94,19 @@
           </div>
 
           <div class="result-block">
-            <div class="result-title">Первичный промпт</div>
-            <pre id="initialPromptOutput" class="output">—</pre>
+            <div class="result-title">Итоговый промпт</div>
+            <pre id="promptOutput" class="output">—</pre>
           </div>
 
           <div class="result-block">
-            <div class="result-title">Критика</div>
-            <pre id="critiqueOutput" class="output">—</pre>
-          </div>
-
-          <div class="result-block">
-            <div class="result-title">Улучшенный финальный промпт</div>
-            <pre id="finalPromptOutput" class="output">—</pre>
+            <div class="result-title">Служебные заметки</div>
+            <pre id="metaOutput" class="output">—</pre>
           </div>
         </section>
       </main>
     </div>
 
+    <script src="/config.js"></script>
     <script src="/app.js"></script>
   </body>
 </html>

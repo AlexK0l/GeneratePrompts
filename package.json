@@ -1,7 +1,7 @@
 {
-  "name": "prompt-critique-mvp-openai",
+  "name": "generator-prompta-openai",
   "version": "1.0.0",
-  "description": "MVP for turning text and voice notes into reusable prompts with critique and improvement pipeline via OpenAI Responses API.",
+  "description": "Генератор промпта: MVP для преобразования текстовых и голосовых заметок в итоговый промпт через OpenAI Responses API.",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",

@@ -34,7 +34,7 @@ async function runPipelineController(req, res, next) {
   try {
     const { noteText, transcriptText } = req.body || {};
     const normalized = normalizeNoteInput({ noteText, transcriptText });
-    const pipeline = await runPromptPipeline(normalized.normalizedInput);
+    const result = await runPromptPipeline(normalized.normalizedInput);
 
     return res.json({
       ok: true,
@@ -44,20 +44,11 @@ async function runPipelineController(req, res, next) {
         normalizedInput: normalized.normalizedInput
       },
       results: {
-        initialPrompt: pipeline.initial.prompt,
-        critique: {
-          summary: pipeline.critique.summary,
-          score: pipeline.critique.score,
-          strengths: pipeline.critique.strengths,
-          issues: pipeline.critique.issues,
-          improvementBrief: pipeline.critique.improvementBrief
-        },
-        finalPrompt: pipeline.improved.finalPrompt,
+        prompt: result.prompt,
         meta: {
-          placeholdersUsed: pipeline.initial.placeholdersUsed,
-          missingButRequired: pipeline.initial.missingButRequired,
-          generationNotes: pipeline.initial.notes,
-          changeLog: pipeline.improved.changeLog
+          placeholdersUsed: result.placeholdersUsed,
+          missingButRequired: result.missingButRequired,
+          generationNotes: result.notes
         }
       }
     });

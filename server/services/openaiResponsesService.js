@@ -26,64 +26,10 @@ const generationSchema = {
   required: ['prompt', 'placeholders_used', 'missing_but_required', 'notes']
 };
 
-const critiqueSchema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    summary: { type: 'string' },
-    score: { type: 'number' },
-    issues: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          title: { type: 'string' },
-          severity: { type: 'string', enum: ['low', 'medium', 'high'] },
-          problem: { type: 'string' },
-          fix: { type: 'string' }
-        },
-        required: ['title', 'severity', 'problem', 'fix']
-      }
-    },
-    strengths: {
-      type: 'array',
-      items: { type: 'string' }
-    },
-    improvement_brief: {
-      type: 'array',
-      items: { type: 'string' }
-    }
-  },
-  required: ['summary', 'score', 'issues', 'strengths', 'improvement_brief']
-};
-
-const improveSchema = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    final_prompt: { type: 'string' },
-    change_log: {
-      type: 'array',
-      items: { type: 'string' }
-    }
-  },
-  required: ['final_prompt', 'change_log']
-};
-
-function getSchemaForStage(stage) {
-  if (stage === 'generate') return { name: 'generated_prompt_payload', schema: generationSchema };
-  if (stage === 'critique') return { name: 'prompt_critique_payload', schema: critiqueSchema };
-  if (stage === 'improve') return { name: 'improved_prompt_payload', schema: improveSchema };
-  throw new HttpError(500, `Неизвестный этап LLM: ${stage}`);
-}
-
-async function sendStructuredOpenAiRequest({ stage, instructions, userInput }) {
+async function sendStructuredOpenAiRequest({ instructions, userInput }) {
   if (!env.openAiApiKey) {
     throw new HttpError(500, 'Не задан OPENAI_API_KEY.');
   }
-
-  const { name, schema } = getSchemaForStage(stage);
 
   try {
     const response = await client.responses.create(
@@ -96,9 +42,9 @@ async function sendStructuredOpenAiRequest({ stage, instructions, userInput }) {
         text: {
           format: {
             type: 'json_schema',
-            name,
+            name: 'generated_prompt_payload',
             strict: true,
-            schema
+            schema: generationSchema
           }
         }
       },
@@ -117,7 +63,7 @@ async function sendStructuredOpenAiRequest({ stage, instructions, userInput }) {
     try {
       parsed = JSON.parse(rawText);
     } catch (error) {
-      throw new HttpError(502, `OpenAI вернул невалидный JSON на этапе ${stage}.`, { rawText });
+      throw new HttpError(502, 'OpenAI вернул невалидный JSON.', { rawText });
     }
 
     return {
