@@ -21,6 +21,11 @@ const API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
 const PLACEHOLDER_API_URL = 'https://your-backend.onrender.com';
 const HEALTH_CHECK_INTERVAL_MS = 30000;
 const HEALTH_CHECK_TIMEOUT_MS = 8000;
+const PREFERRED_AUDIO_MIME_TYPES = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/mp4'
+];
 
 let mediaRecorder = null;
 let mediaStream = null;
@@ -113,6 +118,31 @@ function buildApiUrl(path) {
   return `${baseUrl}${normalizedPath}`;
 }
 
+function getSupportedRecordingMimeType() {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return '';
+  }
+
+  return PREFERRED_AUDIO_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) || '';
+}
+
+function getFileExtensionByMimeType(mimeType) {
+  const normalizedMimeType = String(mimeType || '').split(';')[0].trim().toLowerCase();
+
+  const map = {
+    'audio/webm': 'webm',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/mp4': 'mp4',
+    'audio/x-m4a': 'm4a',
+    'audio/m4a': 'm4a'
+  };
+
+  return map[normalizedMimeType] || 'webm';
+}
+
 async function checkBackendConnection(options = {}) {
   const { silent = false } = options;
 
@@ -187,8 +217,10 @@ function startBackendHealthChecks() {
 }
 
 async function uploadAndTranscribe(blob) {
+  const normalizedMimeType = String(blob.type || 'audio/webm').split(';')[0].trim().toLowerCase();
+  const extension = getFileExtensionByMimeType(normalizedMimeType);
   const formData = new FormData();
-  formData.append('audio', blob, 'voice-note.webm');
+  formData.append('audio', blob, `voice-note.${extension}`);
 
   setStatus('Загружаю аудио и запускаю транскрибацию...', 'muted');
 
@@ -222,7 +254,9 @@ async function startRecording() {
   recordedBlob = null;
 
   mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
+  const selectedMimeType = getSupportedRecordingMimeType();
+  const recorderOptions = selectedMimeType ? { mimeType: selectedMimeType } : undefined;
+  mediaRecorder = new MediaRecorder(mediaStream, recorderOptions);
 
   mediaRecorder.addEventListener('dataavailable', (event) => {
     if (event.data && event.data.size > 0) {
@@ -232,7 +266,8 @@ async function startRecording() {
 
   mediaRecorder.addEventListener('stop', async () => {
     try {
-      recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+      const recordedMimeType = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
+      recordedBlob = new Blob(audioChunks, { type: recordedMimeType });
       const audioUrl = URL.createObjectURL(recordedBlob);
       els.audioPreview.src = audioUrl;
       els.audioPreview.classList.remove('hidden');
