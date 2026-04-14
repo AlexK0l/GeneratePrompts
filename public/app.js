@@ -1,6 +1,5 @@
 const els = {
   noteText: document.getElementById('noteText'),
-  transcriptText: document.getElementById('transcriptText'),
   startRecordingBtn: document.getElementById('startRecordingBtn'),
   stopRecordingBtn: document.getElementById('stopRecordingBtn'),
   runPipelineBtn: document.getElementById('runPipelineBtn'),
@@ -11,7 +10,6 @@ const els = {
   backendStatusBadge: document.getElementById('backendStatusBadge'),
   backendStatusText: document.getElementById('backendStatusText'),
   sourceNoteOutput: document.getElementById('sourceNoteOutput'),
-  transcriptOutput: document.getElementById('transcriptOutput'),
   promptOutput: document.getElementById('promptOutput'),
   metaOutput: document.getElementById('metaOutput')
 };
@@ -47,6 +45,18 @@ function setOutput(element, value) {
   element.textContent = value && String(value).trim() ? String(value).trim() : '—';
 }
 
+function appendToSharedNote(value) {
+  const incomingText = String(value || '').trim();
+  if (!incomingText) {
+    return '';
+  }
+
+  const currentText = String(els.noteText.value || '').trim();
+  const mergedText = currentText ? `${currentText}\n\n${incomingText}` : incomingText;
+  els.noteText.value = mergedText;
+  return mergedText;
+}
+
 function formatMeta(meta) {
   if (!meta) {
     return '—';
@@ -80,7 +90,6 @@ function formatMeta(meta) {
 
 function resetOutputs() {
   setOutput(els.sourceNoteOutput, '—');
-  setOutput(els.transcriptOutput, '—');
   setOutput(els.promptOutput, '—');
   setOutput(els.metaOutput, '—');
 }
@@ -250,9 +259,9 @@ async function uploadAndTranscribe(blob) {
     throw new Error(payload?.error?.message || 'Не удалось транскрибировать аудио.');
   }
 
-  els.transcriptText.value = payload.transcript || '';
-  setOutput(els.transcriptOutput, payload.transcript || '—');
-  setStatus('Голосовая заметка успешно распознана. Можно генерировать промпт.', 'success');
+  const mergedNote = appendToSharedNote(payload.transcript || '');
+  setOutput(els.sourceNoteOutput, mergedNote || '—');
+  setStatus('Голосовая заметка распознана и добавлена в общее поле заметки.', 'success');
 }
 
 async function startRecording() {
@@ -318,10 +327,9 @@ function stopRecording() {
 
 async function runPipeline() {
   const noteText = els.noteText.value.trim();
-  const transcriptText = els.transcriptText.value.trim();
 
-  if (!noteText && !transcriptText) {
-    throw new Error('Добавьте текстовую заметку или голосовую заметку перед запуском.');
+  if (!noteText) {
+    throw new Error('Добавьте заметку или надиктуйте голосовую заметку перед запуском.');
   }
 
   const isBackendAvailable = await checkBackendConnection({ silent: true });
@@ -337,7 +345,7 @@ async function runPipeline() {
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ noteText, transcriptText })
+    body: JSON.stringify({ noteText })
   });
 
   const payload = await readJsonSafe(response);
@@ -348,8 +356,7 @@ async function runPipeline() {
 
   const { source, results } = payload;
 
-  setOutput(els.sourceNoteOutput, source.noteText);
-  setOutput(els.transcriptOutput, source.transcriptText);
+  setOutput(els.sourceNoteOutput, source.normalizedInput || source.noteText);
   setOutput(els.promptOutput, results.prompt);
   setOutput(els.metaOutput, formatMeta(results.meta));
   setStatus('Промпт успешно сгенерирован.', 'success');
@@ -357,7 +364,6 @@ async function runPipeline() {
 
 function resetAll() {
   els.noteText.value = '';
-  els.transcriptText.value = '';
   els.audioPreview.removeAttribute('src');
   els.audioPreview.classList.add('hidden');
 

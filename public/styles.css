@@ -173,6 +173,10 @@ textarea {
   line-height: 1.5;
 }
 
+#noteText {
+  min-height: 102px;
+}
+
 textarea:focus {
   outline: 2px solid rgba(124, 156, 255, 0.4);
   border-color: transparent;
@@ -278,7 +282,14 @@ textarea:focus {
 
 .audio-preview {
   width: 100%;
-  margin: 10px 0 16px;
+  margin: 10px 0 12px;
+}
+
+.voice-note-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .hidden {

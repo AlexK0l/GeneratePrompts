@@ -32,8 +32,8 @@ async function transcribeAudioController(req, res, next) {
 
 async function runPipelineController(req, res, next) {
   try {
-    const { noteText, transcriptText } = req.body || {};
-    const normalized = normalizeNoteInput({ noteText, transcriptText });
+    const { noteText, transcriptText, combinedText } = req.body || {};
+    const normalized = normalizeNoteInput({ noteText, transcriptText, combinedText });
     const result = await runPromptPipeline(normalized.normalizedInput);
 
     return res.json({
