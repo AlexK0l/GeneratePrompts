@@ -115,6 +115,11 @@ function setBackendStatus(state, text, details) {
   els.backendStatusText.textContent = details;
 }
 
+function logBackendDebug(message, extra = '') {
+  const suffix = extra ? ` ${extra}` : '';
+  console.info(`[backend] ${message}${suffix}`);
+}
+
 function resolveApiBaseUrl() {
   if (API_BASE_URL && API_BASE_URL !== PLACEHOLDER_API_URL) {
     return API_BASE_URL;
@@ -124,9 +129,7 @@ function resolveApiBaseUrl() {
     return window.location.origin;
   }
 
-  throw new Error(
-    'Не настроен frontend -> backend URL. Откройте public/config.js и укажите реальный Render Web Service URL в APP_CONFIG.API_BASE_URL.'
-  );
+  throw new Error('Сервис сейчас недоступен. Попробуйте позже.');
 }
 
 function buildApiUrl(path) {
@@ -182,8 +185,10 @@ async function checkBackendConnection(options = {}) {
   const resolvedBaseUrl = resolveApiBaseUrl();
 
   if (!silent) {
-    setBackendStatus('checking', 'Проверка...', `Проверяю доступность backend: ${resolvedBaseUrl}`);
+    setBackendStatus('checking', 'Проверка...', 'Проверяем подключение сервиса.');
   }
+
+  logBackendDebug('Health check started for', resolvedBaseUrl);
 
   try {
     const response = await fetch(buildApiUrl('/api/health'), {
@@ -197,29 +202,26 @@ async function checkBackendConnection(options = {}) {
       throw new Error(payload?.error?.message || 'Backend ответил с ошибкой на health-check.');
     }
 
-    setBackendStatus('online', 'Онлайн', `Backend доступен: ${resolvedBaseUrl}`);
+    setBackendStatus('online', 'Онлайн', 'Сервис подключен и готов к работе.');
+    logBackendDebug('Health check success for', resolvedBaseUrl);
 
     if (!silent) {
-      setStatus(
-        usingConfiguredUrl
-          ? 'Связь с backend установлена. Система готова к работе.'
-          : 'Связь с backend установлена. Используется текущий origin сайта.',
-        'success'
-      );
+      setStatus('Подключение активно. Система готова к работе.', 'success');
     }
 
     return true;
   } catch (error) {
     setBackendStatus(
       usingConfiguredUrl ? 'offline' : 'config',
-      usingConfiguredUrl ? 'Недоступен' : 'Проверьте URL',
+      usingConfiguredUrl ? 'Недоступен' : 'Ошибка',
       usingConfiguredUrl
-        ? `Не удаётся подключиться к backend: ${resolvedBaseUrl}. Проверьте Render Web Service, CORS и public/config.js.`
-        : 'Backend по текущему origin недоступен. Укажите явный URL backend в public/config.js, если frontend и backend разнесены.'
+        ? 'Сервис временно недоступен. Попробуйте ещё раз чуть позже.'
+        : 'Не удалось проверить подключение сервиса.'
     );
+    logBackendDebug('Health check failed for', `${resolvedBaseUrl} :: ${error.message}`);
 
     if (!silent) {
-      setStatus(`Backend недоступен: ${error.message}`, 'error');
+      setStatus('Сервис временно недоступен. Повторите попытку позже.', 'error');
     }
 
     return false;
@@ -271,7 +273,7 @@ async function startRecording() {
 
   const isBackendAvailable = await checkBackendConnection({ silent: true });
   if (!isBackendAvailable) {
-    throw new Error('Backend недоступен. Дождитесь восстановления связи или проверьте настройки подключения.');
+    throw new Error('Сервис временно недоступен. Дождитесь восстановления связи и попробуйте снова.');
   }
 
   audioChunks = [];
@@ -334,7 +336,7 @@ async function runPipeline() {
 
   const isBackendAvailable = await checkBackendConnection({ silent: true });
   if (!isBackendAvailable) {
-    throw new Error('Backend недоступен. Невозможно отправить заметку на генерацию промпта.');
+    throw new Error('Сервис временно недоступен. Невозможно отправить заметку на генерацию промпта.');
   }
 
   els.runPipelineBtn.disabled = true;
@@ -377,12 +379,12 @@ function resetAll() {
   resetOutputs();
 
   if (backendConnectionState === 'online') {
-    setStatus('Форма очищена. Связь с backend активна, можно продолжать.', 'muted');
+    setStatus('Форма очищена. Сервис доступен, можно продолжать.', 'muted');
   } else if (backendConnectionState === 'offline') {
-    setStatus('Форма очищена. Backend сейчас недоступен.', 'error');
+    setStatus('Форма очищена. Сервис сейчас недоступен.', 'error');
   } else if (backendConnectionState === 'config') {
     setStatus(
-      'Форма очищена. При необходимости укажите APP_CONFIG.API_BASE_URL в public/config.js.',
+      'Форма очищена. Проверка подключения сервиса пока не завершена.',
       'error'
     );
   } else {
@@ -419,6 +421,6 @@ els.resetBtn.addEventListener('click', () => {
 });
 
 resetOutputs();
-setBackendStatus('checking', 'Проверка...', 'Выполняется первичная проверка доступности backend.');
+setBackendStatus('checking', 'Проверка...', 'Проверяем подключение сервиса.');
 checkBackendConnection();
 startBackendHealthChecks();
