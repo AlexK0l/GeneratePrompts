@@ -1,6 +1,6 @@
 # Генератор промпта
 
-Node.js MVP that accepts a shared note field and voice notes, transcribes audio, appends the transcript into the shared field, and generates a final prompt from that single source.
+Node.js MVP that accepts text notes and voice notes, transcribes audio, and generates a final prompt from the combined input.
 
 ## Stack
 
@@ -13,7 +13,7 @@ Node.js MVP that accepts a shared note field and voice notes, transcribes audio,
 
 1. Copy `.env.example` to `.env`
 2. Fill in `OPENAI_API_KEY`
-3. If frontend and backend are split, set `FRONTEND_API_BASE_URL` in `.env`
+3. If frontend and backend are split, set the backend URL in `public/config.js`
 4. Run `npm install`
 5. Run `npm run dev`
 6. Open `http://localhost:3000`
@@ -50,10 +50,12 @@ This project is configured for a split deployment:
 
 ### Frontend configuration
 
-Set the backend URL through the environment variable `FRONTEND_API_BASE_URL` only when frontend and backend are on different origins:
+Edit `public/config.js` and set your backend URL only when frontend and backend are on different origins:
 
-```env
-FRONTEND_API_BASE_URL=https://your-backend.onrender.com
+```js
+window.APP_CONFIG = {
+  API_BASE_URL: 'https://your-backend.onrender.com'
+};
 ```
 
 ### Backend configuration
@@ -63,7 +65,6 @@ Set these environment variables in the Render Web Service:
 ```env
 PORT=10000
 CLIENT_ORIGIN=https://your-frontend.onrender.com
-FRONTEND_API_BASE_URL=https://your-backend.onrender.com
 OPENAI_API_KEY=your_openai_key_here
 OPENAI_MODEL=gpt-5.4-mini
 OPENAI_MAX_OUTPUT_TOKENS=2200
@@ -77,9 +78,9 @@ MAX_AUDIO_SIZE_MB=25
 
 ### How frontend and backend communicate
 
-The frontend reads the backend base URL from `/config.js`, which is generated from `FRONTEND_API_BASE_URL`, and sends requests to:
+The frontend reads the backend base URL from `public/config.js` and sends requests to:
 
 - `${API_BASE_URL}/api/transcribe`
 - `${API_BASE_URL}/api/prompt/pipeline`
 
-If `FRONTEND_API_BASE_URL` is empty, the frontend uses the current site origin.
+If `API_BASE_URL` is empty, the frontend uses the current site origin.

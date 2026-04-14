@@ -1,5 +1,6 @@
 const els = {
-  sourceText: document.getElementById('sourceText'),
+  noteText: document.getElementById('noteText'),
+  transcriptText: document.getElementById('transcriptText'),
   startRecordingBtn: document.getElementById('startRecordingBtn'),
   stopRecordingBtn: document.getElementById('stopRecordingBtn'),
   runPipelineBtn: document.getElementById('runPipelineBtn'),
@@ -9,7 +10,8 @@ const els = {
   statusBox: document.getElementById('statusBox'),
   backendStatusBadge: document.getElementById('backendStatusBadge'),
   backendStatusText: document.getElementById('backendStatusText'),
-  sourceOutput: document.getElementById('sourceOutput'),
+  sourceNoteOutput: document.getElementById('sourceNoteOutput'),
+  transcriptOutput: document.getElementById('transcriptOutput'),
   promptOutput: document.getElementById('promptOutput'),
   metaOutput: document.getElementById('metaOutput')
 };
@@ -77,7 +79,8 @@ function formatMeta(meta) {
 }
 
 function resetOutputs() {
-  setOutput(els.sourceOutput, '—');
+  setOutput(els.sourceNoteOutput, '—');
+  setOutput(els.transcriptOutput, '—');
   setOutput(els.promptOutput, '—');
   setOutput(els.metaOutput, '—');
 }
@@ -113,7 +116,7 @@ function resolveApiBaseUrl() {
   }
 
   throw new Error(
-    'Не настроен frontend -> backend URL. Укажите переменную окружения FRONTEND_API_BASE_URL или используйте тот же origin.'
+    'Не настроен frontend -> backend URL. Откройте public/config.js и укажите реальный Render Web Service URL в APP_CONFIG.API_BASE_URL.'
   );
 }
 
@@ -153,18 +156,6 @@ function getFileExtensionByMimeType(mimeType) {
   };
 
   return map[normalizedMimeType] || 'webm';
-}
-
-function appendTranscriptToSource(transcript) {
-  const cleanedTranscript = String(transcript || '').trim();
-  if (!cleanedTranscript) {
-    return;
-  }
-
-  const currentSource = String(els.sourceText.value || '').trim();
-  els.sourceText.value = currentSource
-    ? `${currentSource}\n\n${cleanedTranscript}`
-    : cleanedTranscript;
 }
 
 async function readJsonSafe(response) {
@@ -214,8 +205,8 @@ async function checkBackendConnection(options = {}) {
       usingConfiguredUrl ? 'offline' : 'config',
       usingConfiguredUrl ? 'Недоступен' : 'Проверьте URL',
       usingConfiguredUrl
-        ? `Не удаётся подключиться к backend: ${resolvedBaseUrl}. Проверьте сервис и значение FRONTEND_API_BASE_URL.`
-        : 'Backend по текущему origin недоступен. Укажите FRONTEND_API_BASE_URL, если frontend и backend разнесены.'
+        ? `Не удаётся подключиться к backend: ${resolvedBaseUrl}. Проверьте Render Web Service, CORS и public/config.js.`
+        : 'Backend по текущему origin недоступен. Укажите явный URL backend в public/config.js, если frontend и backend разнесены.'
     );
 
     if (!silent) {
@@ -259,8 +250,9 @@ async function uploadAndTranscribe(blob) {
     throw new Error(payload?.error?.message || 'Не удалось транскрибировать аудио.');
   }
 
-  appendTranscriptToSource(payload.transcript || '');
-  setStatus('Голосовая заметка успешно распознана и добавлена в общее поле.', 'success');
+  els.transcriptText.value = payload.transcript || '';
+  setOutput(els.transcriptOutput, payload.transcript || '—');
+  setStatus('Голосовая заметка успешно распознана. Можно генерировать промпт.', 'success');
 }
 
 async function startRecording() {
@@ -325,10 +317,11 @@ function stopRecording() {
 }
 
 async function runPipeline() {
-  const sourceText = els.sourceText.value.trim();
+  const noteText = els.noteText.value.trim();
+  const transcriptText = els.transcriptText.value.trim();
 
-  if (!sourceText) {
-    throw new Error('Добавьте заметку или запишите голосовую заметку перед запуском.');
+  if (!noteText && !transcriptText) {
+    throw new Error('Добавьте текстовую заметку или голосовую заметку перед запуском.');
   }
 
   const isBackendAvailable = await checkBackendConnection({ silent: true });
@@ -344,7 +337,7 @@ async function runPipeline() {
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ sourceText })
+    body: JSON.stringify({ noteText, transcriptText })
   });
 
   const payload = await readJsonSafe(response);
@@ -355,14 +348,16 @@ async function runPipeline() {
 
   const { source, results } = payload;
 
-  setOutput(els.sourceOutput, source.sourceText);
+  setOutput(els.sourceNoteOutput, source.noteText);
+  setOutput(els.transcriptOutput, source.transcriptText);
   setOutput(els.promptOutput, results.prompt);
   setOutput(els.metaOutput, formatMeta(results.meta));
   setStatus('Промпт успешно сгенерирован.', 'success');
 }
 
 function resetAll() {
-  els.sourceText.value = '';
+  els.noteText.value = '';
+  els.transcriptText.value = '';
   els.audioPreview.removeAttribute('src');
   els.audioPreview.classList.add('hidden');
 
@@ -381,7 +376,7 @@ function resetAll() {
     setStatus('Форма очищена. Backend сейчас недоступен.', 'error');
   } else if (backendConnectionState === 'config') {
     setStatus(
-      'Форма очищена. При необходимости задайте FRONTEND_API_BASE_URL в переменных окружения.',
+      'Форма очищена. При необходимости укажите APP_CONFIG.API_BASE_URL в public/config.js.',
       'error'
     );
   } else {

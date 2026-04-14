@@ -8,16 +8,28 @@ function cleanText(value) {
     .trim();
 }
 
-function normalizeNoteInput({ sourceText }) {
-  const cleanedSourceText = cleanText(sourceText);
+function normalizeNoteInput({ noteText, transcriptText }) {
+  const cleanedNote = cleanText(noteText);
+  const cleanedTranscript = cleanText(transcriptText);
 
-  if (!cleanedSourceText) {
-    throw new HttpError(400, 'Нужно передать заметку перед запуском генерации промпта.');
+  if (!cleanedNote && !cleanedTranscript) {
+    throw new HttpError(400, 'Нужно передать текстовую заметку или текст из голосовой заметки.');
+  }
+
+  const segments = [];
+
+  if (cleanedNote) {
+    segments.push('Текстовая заметка пользователя:\n' + cleanedNote);
+  }
+
+  if (cleanedTranscript) {
+    segments.push('Распознанный текст голосовой заметки:\n' + cleanedTranscript);
   }
 
   return {
-    sourceText: cleanedSourceText,
-    normalizedInput: cleanedSourceText
+    noteText: cleanedNote,
+    transcriptText: cleanedTranscript,
+    normalizedInput: segments.join('\n\n')
   };
 }
 

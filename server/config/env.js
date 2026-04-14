@@ -12,7 +12,6 @@ const env = {
   port: toNumber(process.env.PORT, 3000),
   nodeEnv: process.env.NODE_ENV || 'development',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:3000',
-  frontendApiBaseUrl: process.env.FRONTEND_API_BASE_URL || '',
   openAiApiKey: process.env.OPENAI_API_KEY || '',
   openAiModel: process.env.OPENAI_MODEL || 'gpt-5.4-mini',
   openAiMaxOutputTokens: toNumber(process.env.OPENAI_MAX_OUTPUT_TOKENS, 2200),

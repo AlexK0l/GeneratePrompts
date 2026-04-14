@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "nodemon server/index.js",
-    "check": "node --check server/index.js && node --check server/app.js && node --check server/config/env.js && node --check server/config/models.js && node --check server/controllers/promptController.js && node --check server/middleware/errorHandler.js && node --check server/prompts/promptingGuide.js && node --check server/prompts/systemPrompts.js && node --check server/routes/api.js && node --check server/services/audioPreparationService.js && node --check server/services/openaiResponsesService.js && node --check server/services/noteNormalizerService.js && node --check server/services/promptPipelineService.js && node --check server/services/transcriptionService.js && node --check server/utils/httpError.js && node --check public/app.js"
+    "check": "node --check server/index.js && node --check server/app.js && node --check server/config/env.js && node --check server/config/models.js && node --check server/controllers/promptController.js && node --check server/middleware/errorHandler.js && node --check server/prompts/promptingGuide.js && node --check server/prompts/systemPrompts.js && node --check server/routes/api.js && node --check server/services/audioPreparationService.js && node --check server/services/openaiResponsesService.js && node --check server/services/noteNormalizerService.js && node --check server/services/promptPipelineService.js && node --check server/services/transcriptionService.js && node --check server/utils/httpError.js && node --check public/app.js",
+    "build:frontend-config": "node scripts/build-frontend-config.js",
+    "render:static": "npm run build:frontend-config"
   },
   "engines": {
     "node": ">=20.0.0"

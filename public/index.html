@@ -14,8 +14,8 @@
             <p class="eyebrow">Node.js + OpenAI Responses API + Speech-to-Text</p>
             <h1>Генератор промпта</h1>
             <p class="hero-copy">
-              Загрузите мысль в свободной форме, а система соберёт итоговый промпт на основе одного общего поля заметки.
-              Текст из голосовой записи после транскрибации автоматически добавится туда же.
+              Загрузите мысль в свободной форме, а система соберёт итоговый промпт из текстовой
+              и голосовой заметки по заданной инструкции.
             </p>
           </div>
 
@@ -36,10 +36,10 @@
           <h2>1. Исходные данные</h2>
 
           <label class="field">
-            <span>Общая заметка</span>
+            <span>Текстовая заметка</span>
             <textarea
-              id="sourceText"
-              rows="10"
+              id="noteText"
+              rows="8"
               placeholder="Например: мне нужен промпт для LLM, который поможет собрать PRD для SaaS-продукта для малых команд..."
             ></textarea>
           </label>
@@ -49,8 +49,7 @@
               <div>
                 <h3>Голосовая заметка</h3>
                 <p>
-                  Запишите голос прямо в браузере. После остановки запись автоматически уйдёт на серверную транскрибацию,
-                  а распознанный текст будет добавлен в общее поле выше.
+                  Запишите голос прямо в браузере. После остановки запись автоматически уйдёт на серверную транскрибацию.
                 </p>
               </div>
               <span id="recordingBadge" class="badge">Не записывается</span>
@@ -62,6 +61,15 @@
             </div>
 
             <audio id="audioPreview" controls class="audio-preview hidden"></audio>
+
+            <label class="field">
+              <span>Распознанный текст из аудио</span>
+              <textarea
+                id="transcriptText"
+                rows="6"
+                placeholder="После транскрибации здесь появится текст. Его можно вручную поправить перед генерацией промпта."
+              ></textarea>
+            </label>
           </div>
 
           <div class="action-row">
@@ -76,8 +84,13 @@
           <h2>2. Результаты</h2>
 
           <div class="result-block">
-            <div class="result-title">Итоговый исходный текст</div>
-            <pre id="sourceOutput" class="output">—</pre>
+            <div class="result-title">Исходная заметка</div>
+            <pre id="sourceNoteOutput" class="output">—</pre>
+          </div>
+
+          <div class="result-block">
+            <div class="result-title">Распознанный текст из аудио</div>
+            <pre id="transcriptOutput" class="output">—</pre>
           </div>
 
           <div class="result-block">
