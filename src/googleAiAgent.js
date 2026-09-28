@@ -79,7 +79,7 @@ async function executeActions(page, actions = []) {
         await page.keyboard.insertText(action.text || "");
         break;
       case "wait":
-        await page.waitForTimeout(Math.min(Number(action.ms || action.duration || 1200), 5000));
+        await page.waitForTimeout(Math.min(Number(action.ms ?? (action.duration ? action.duration * 1000 : 1200)), 5000));
         break;
       case "screenshot":
         break;
