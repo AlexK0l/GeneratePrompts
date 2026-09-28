@@ -3,8 +3,7 @@ const REGIONS=["Республика Адыгея","Республика Алт�
 const e={
   region:document.querySelector("#region"),
   regions:document.querySelector("#regions"),
-  passwordWrap:document.querySelector("#passwordWrap"),
-  password:document.querySelector("#password"),
+  apiKey:document.querySelector("#apiKey"),
   start:document.querySelector("#startBtn"),
   cancel:document.querySelector("#cancelBtn"),
   progressCard:document.querySelector("#progressCard"),
@@ -29,7 +28,6 @@ let pollTimer=null;
 function headers(json=false){
   const h={};
   if(json) h["Content-Type"]="application/json";
-  if(e.password.value) h["x-app-password"]=e.password.value;
   return h;
 }
 
@@ -123,7 +121,9 @@ async function start(){
   e.progressCard.hidden=false;
   e.start.disabled=true;e.cancel.disabled=false;
   try{
-    const d=await api("/api/jobs",{method:"POST",body:JSON.stringify({region})});
+    const apiKey=e.apiKey.value.trim();
+    if(!apiKey){alert("Введите OpenAI API key.");e.start.disabled=false;e.cancel.disabled=true;return;}
+    const d=await api("/api/jobs",{method:"POST",body:JSON.stringify({region,apiKey})});
     currentJobId=d.id;
     localStorage.setItem("sat_current_job",currentJobId);
     if(pollTimer)clearInterval(pollTimer);
@@ -169,7 +169,6 @@ e.download.onclick=download;
 (async()=>{
   try{
     config=await api("/api/config");
-    e.passwordWrap.hidden=!config.authRequired;
     renderSteps((config.steps||[]).map((name,i)=>({step:i+1,name,status:"waiting",detail:"ожидает"})));
     if(currentJobId){
       e.progressCard.hidden=false;
