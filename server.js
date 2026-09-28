@@ -5,6 +5,7 @@ import express from "express";
 import { runResearchPipeline } from "./src/pipeline.js";
 import { buildWorkbookBuffer, safeFileName } from "./src/xlsx.js";
 import { STEPS } from "./src/constants.js";
+import { launchResearchBrowser } from "./src/googleAiAgent.js";
 
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -142,4 +143,15 @@ app.use((error, _req, res, _next) => {
 
 app.listen(port, "0.0.0.0", () => {
   console.log(`SAT research web service listening on ${port}`);
+  setTimeout(async () => {
+    let browser;
+    try {
+      browser = await launchResearchBrowser();
+      console.log("Chromium self-test passed");
+    } catch (error) {
+      console.error("Chromium self-test failed:", error?.message || error);
+    } finally {
+      if (browser) await browser.close().catch(() => {});
+    }
+  }, 1000).unref();
 });
