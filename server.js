@@ -24,10 +24,10 @@ app.get("/api/config", (_req, res) => {
 
 app.post("/api/jobs", async (req, res) => {
   const region = String(req.body?.region || "").trim();
-  const apiKey = String(req.body?.apiKey || "").trim();
+  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
 
   if (!region) return res.status(400).json({ error: "Регион обязателен" });
-  if (!apiKey) return res.status(400).json({ error: "OpenAI API key обязателен" });
+  if (!apiKey) return res.status(503).json({ error: "OPENAI_API_KEY не настроен на Render" });
 
   const id = crypto.randomUUID();
   const job = {
