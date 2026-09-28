@@ -139,7 +139,7 @@ app.use(express.static(path.join(__dirname, "public"), {
   maxAge: process.env.NODE_ENV === "production" ? "5m" : 0
 }));
 
-app.get("*", (_req, res) => {
+app.get("/{*splat}", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
