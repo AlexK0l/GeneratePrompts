@@ -101,10 +101,10 @@ function applyContact(row, contact) {
   if (contact?.leader) row["Руководитель / ЛПР"] = contact.leader;
 }
 
-export async function runResearchPipeline({ job, redis }) {
-  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
+export async function runResearchPipeline({ job, apiKey }) {
+  if (!apiKey) throw new Error("OpenAI API key is required");
 
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey });
   const region = String(job.data.region || "").trim();
   if (!region) throw new Error("Region is required");
 
@@ -117,12 +117,8 @@ export async function runResearchPipeline({ job, redis }) {
     });
   };
 
-  const isCancelled = async () => {
-    return (await redis.get(`cancel:${job.id}`)) === "1";
-  };
-
   const assertNotCancelled = async () => {
-    if (await isCancelled()) throw new Error("JOB_CANCELLED");
+    if (job.cancelled) throw new Error("JOB_CANCELLED");
   };
 
   await progress({ phase: "starting", percent: 0 });
@@ -219,7 +215,7 @@ ${JSON.stringify(parts.map((data, i) => ({ step: i + 1, name: STEPS[i], data }))
           browser,
           row,
           region,
-          isCancelled: () => false
+          isCancelled: () => Boolean(job.cancelled)
         });
       } catch (error) {
         contact = {
@@ -265,11 +261,8 @@ ${JSON.stringify(parts.map((data, i) => ({ step: i + 1, name: STEPS[i], data }))
     contactStats: { ok, unavailable, notFound }
   });
 
-  const resultKey = `result:${job.id}`;
-  await redis.set(resultKey, JSON.stringify(finalResult), "EX", 86400);
-
   return {
-    resultKey,
+    result: finalResult,
     region,
     counts: {
       direct_buyers: finalResult.direct_buyers.length,
