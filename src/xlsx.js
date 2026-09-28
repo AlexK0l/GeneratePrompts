@@ -1,4 +1,4 @@
-import XLSX from "xlsx";
+import * as XLSX from "xlsx";
 import { COLS, STAT_COLS } from "./constants.js";
 
 function pick(rows, cols) {
