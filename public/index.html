@@ -1,100 +1,63 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Генератор промпта</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <div class="page">
-      <header class="hero">
-        <div class="hero-top">
-          <div>
-            <p class="eyebrow">Node.js + OpenAI Responses API + Speech-to-Text</p>
-            <h1>Генератор промпта</h1>
-            <p class="hero-copy">
-              Загрузите мысль в свободной форме, а система соберёт итоговый промпт из общей заметки,
-              которую можно набрать вручную и дополнить голосовой записью.
-            </p>
-          </div>
-
-          <aside class="connection-panel" aria-live="polite">
-            <span class="connection-label">Статус сервиса</span>
-            <div class="connection-label-row">
-              <span id="backendStatusBadge" class="connection-badge checking">Проверка...</span>
-            </div>
-            <div id="backendStatusText" class="connection-text">Проверяем подключение сервиса.</div>
-          </aside>
-        </div>
-      </header>
-
-      <main class="layout">
-        <section class="card input-card">
-          <h2>1. Исходные данные</h2>
-
-          <label class="field">
-            <span>Заметка</span>
-            <textarea
-              id="noteText"
-              rows="3"
-              placeholder="Например: мне нужен промпт для LLM, который поможет собрать PRD для SaaS-продукта для малых команд..."
-            ></textarea>
-          </label>
-
-          <div class="voice-panel">
-            <div class="voice-header">
-              <div>
-                <h3>Голосовая заметка</h3>
-                <p>
-                  Запишите голос прямо в браузере. После остановки запись автоматически уйдёт на серверную транскрибацию и добавится в общее поле заметки.
-                </p>
-              </div>
-              <span id="recordingBadge" class="badge">Не записывается</span>
-            </div>
-
-            <div class="voice-actions">
-              <button id="startRecordingBtn" class="btn btn-primary" type="button">Начать запись</button>
-              <button id="stopRecordingBtn" class="btn btn-secondary" type="button" disabled>Остановить запись</button>
-            </div>
-
-            <audio id="audioPreview" controls class="audio-preview hidden"></audio>
-            <p class="voice-note-hint">
-              Распознанный текст будет добавлен в поле заметки выше, где его можно сразу отредактировать перед генерацией промпта.
-            </p>
-          </div>
-
-          <div class="action-row">
-            <button id="runPipelineBtn" class="btn btn-accent" type="button">Сгенерировать промпт</button>
-            <button id="resetBtn" class="btn btn-ghost" type="button">Сбросить</button>
-          </div>
-
-          <div id="statusBox" class="status-box muted">Система готова к работе.</div>
-        </section>
-
-        <section class="card results-card">
-          <h2>2. Результаты</h2>
-
-          <div class="result-block">
-            <div class="result-title">Объединённая заметка</div>
-            <pre id="sourceNoteOutput" class="output">—</pre>
-          </div>
-
-
-          <div class="result-block">
-            <div class="result-title">Итоговый промпт</div>
-            <pre id="promptOutput" class="output">—</pre>
-          </div>
-
-          <div class="result-block">
-            <div class="result-title">Служебные заметки</div>
-            <pre id="metaOutput" class="output">—</pre>
-          </div>
-        </section>
-      </main>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Региональный поиск покупателей САТ</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<main class="shell">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">GPT + web_search + Google AI Mode</p>
+      <h1>Региональный поиск потенциальных покупателей САТ</h1>
+      <p class="lead">10 исследовательских инструкций, затем отдельный прогон всех найденных компаний через Google AI Mode в виртуальном Chromium для поиска контактов.</p>
     </div>
+    <span class="badge">11 этапов</span>
+  </section>
 
-    <script src="/config.js"></script>
-    <script src="/app.js"></script>
-  </body>
+  <section class="card">
+    <label>
+      <span>Регион</span>
+      <input id="region" list="regions" placeholder="Например: Воронежская область" autocomplete="off">
+      <datalist id="regions"></datalist>
+    </label>
+    <label id="passwordWrap" hidden>
+      <span>Код доступа</span>
+      <input id="password" type="password" autocomplete="current-password">
+      <small>Задаётся переменной APP_PASSWORD на Render.</small>
+    </label>
+    <div class="actions">
+      <button id="startBtn">Запустить исследование</button>
+      <button id="cancelBtn" class="secondary" disabled>Остановить</button>
+    </div>
+    <p class="note">OpenAI API key хранится только на Render. Google API не используется.</p>
+  </section>
+
+  <section class="card" id="progressCard" hidden>
+    <div class="progress-head">
+      <div>
+        <h2 id="statusTitle">Подготовка</h2>
+        <p id="statusText">Инициализация…</p>
+      </div>
+      <strong id="percent">0%</strong>
+    </div>
+    <div class="progress-track"><div id="progressBar"></div></div>
+    <ol id="steps" class="steps"></ol>
+    <div id="contactBox" class="contact-box" hidden></div>
+    <div id="errorBox" class="error" hidden></div>
+  </section>
+
+  <section class="card result" id="resultCard" hidden>
+    <div>
+      <p class="eyebrow">Готово</p>
+      <h2>Итоговый файл сформирован</h2>
+      <p id="resultSummary"></p>
+    </div>
+    <button id="downloadBtn">Скачать XLSX</button>
+  </section>
+</main>
+<script type="module" src="/app.js"></script>
+</body>
 </html>
