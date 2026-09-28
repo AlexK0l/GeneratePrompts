@@ -2,137 +2,129 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { queue, createRedis } from "./src/queue.js";
+import { runResearchPipeline } from "./src/pipeline.js";
 import { buildWorkbookBuffer, safeFileName } from "./src/xlsx.js";
 import { STEPS } from "./src/constants.js";
 
 const app = express();
-const redis = createRedis();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 10000);
+const jobs = new Map();
 
-app.use(express.json({ limit: "1mb" }));
-
-function authorized(req) {
-  const expected = process.env.APP_PASSWORD;
-  if (!expected) return true;
-  const supplied = String(req.get("x-app-password") || "");
-  const a = Buffer.from(supplied);
-  const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
-
-app.use("/api", (req, res, next) => {
-  if (req.path === "/config") return next();
-  if (!authorized(req)) return res.status(401).json({ error: "Неверный код доступа" });
-  next();
-});
+app.use(express.json({ limit: "2mb" }));
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "sat-region-research" });
 });
 
 app.get("/api/config", (_req, res) => {
-  res.json({
-    authRequired: Boolean(process.env.APP_PASSWORD),
-    steps: STEPS
+  res.json({ steps: STEPS });
+});
+
+app.post("/api/jobs", async (req, res) => {
+  const region = String(req.body?.region || "").trim();
+  const apiKey = String(req.body?.apiKey || "").trim();
+
+  if (!region) return res.status(400).json({ error: "Регион обязателен" });
+  if (!apiKey) return res.status(400).json({ error: "OpenAI API key обязателен" });
+
+  const id = crypto.randomUUID();
+  const job = {
+    id,
+    region,
+    state: "waiting",
+    progress: {},
+    result: null,
+    error: null,
+    cancelled: false,
+    createdAt: Date.now(),
+    async updateProgress(progress) {
+      this.progress = progress;
+    }
+  };
+  jobs.set(id, job);
+
+  res.status(202).json({ id, region });
+
+  queueMicrotask(async () => {
+    job.state = "active";
+    try {
+      const output = await runResearchPipeline({ job, apiKey });
+      if (job.cancelled) throw new Error("JOB_CANCELLED");
+      job.result = output;
+      job.state = "completed";
+    } catch (error) {
+      if (error?.message === "JOB_CANCELLED") {
+        job.state = "cancelled";
+        job.error = "Остановлено пользователем";
+      } else {
+        job.state = "failed";
+        job.error = error?.message || "Ошибка выполнения";
+        console.error(error);
+      }
+    }
   });
 });
 
-app.post("/api/jobs", async (req, res, next) => {
-  try {
-    const region = String(req.body?.region || "").trim();
-    if (!region) return res.status(400).json({ error: "Регион обязателен" });
-    if (!process.env.OPENAI_API_KEY) {
-      return res.status(503).json({ error: "OPENAI_API_KEY не настроен на Render" });
+app.get("/api/jobs/:id", (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "Задание не найдено или сервис был перезапущен" });
+
+  res.json({
+    id: job.id,
+    state: job.state,
+    progress: job.progress || {},
+    result: job.state === "completed"
+      ? {
+          region: job.result?.region,
+          counts: job.result?.counts,
+          contacts: job.result?.contacts
+        }
+      : null,
+    error: ["failed", "cancelled"].includes(job.state) ? job.error : null
+  });
+});
+
+app.post("/api/jobs/:id/cancel", (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "Задание не найдено" });
+
+  job.cancelled = true;
+  res.json({ ok: true });
+});
+
+app.get("/api/jobs/:id/download", (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "Задание не найдено" });
+  if (job.state !== "completed") {
+    return res.status(409).json({ error: "Итоговый файл ещё не готов" });
+  }
+
+  const result = job.result?.result;
+  if (!result) return res.status(500).json({ error: "Результат отсутствует" });
+
+  const buffer = buildWorkbookBuffer(result);
+  const filename = safeFileName(job.result?.region || "result");
+
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`
+  );
+  res.send(buffer);
+});
+
+setInterval(() => {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  for (const [id, job] of jobs.entries()) {
+    if (job.createdAt < cutoff && !["active", "waiting"].includes(job.state)) {
+      jobs.delete(id);
     }
-
-    const jobId = crypto.randomUUID();
-    await redis.del(`cancel:${jobId}`);
-    const job = await queue.add(
-      "research",
-      { region },
-      {
-        jobId,
-        attempts: 1,
-        removeOnComplete: false,
-        removeOnFail: false
-      }
-    );
-
-    res.status(202).json({ id: job.id, region });
-  } catch (error) {
-    next(error);
   }
-});
-
-app.get("/api/jobs/:id", async (req, res, next) => {
-  try {
-    const job = await queue.getJob(req.params.id);
-    if (!job) return res.status(404).json({ error: "Задание не найдено" });
-
-    const state = await job.getState();
-    res.json({
-      id: job.id,
-      state,
-      progress: job.progress || {},
-      result: state === "completed" ? job.returnvalue : null,
-      error: state === "failed" ? job.failedReason : null
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/jobs/:id/cancel", async (req, res, next) => {
-  try {
-    const job = await queue.getJob(req.params.id);
-    if (!job) return res.status(404).json({ error: "Задание не найдено" });
-
-    await redis.set(`cancel:${job.id}`, "1", "EX", 86400);
-    const state = await job.getState();
-    if (["waiting", "delayed", "paused"].includes(state)) {
-      await job.remove().catch(() => {});
-    }
-    res.json({ ok: true });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/jobs/:id/download", async (req, res, next) => {
-  try {
-    const job = await queue.getJob(req.params.id);
-    if (!job) return res.status(404).json({ error: "Задание не найдено" });
-
-    const state = await job.getState();
-    if (state !== "completed") {
-      return res.status(409).json({ error: "Итоговый файл ещё не готов" });
-    }
-
-    const resultKey = job.returnvalue?.resultKey;
-    if (!resultKey) return res.status(500).json({ error: "Не найден ключ результата" });
-
-    const raw = await redis.get(resultKey);
-    if (!raw) return res.status(410).json({ error: "Срок хранения результата истёк" });
-
-    const result = JSON.parse(raw);
-    const buffer = buildWorkbookBuffer(result);
-    const filename = safeFileName(job.returnvalue?.region || "result");
-
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`
-    );
-    res.send(buffer);
-  } catch (error) {
-    next(error);
-  }
-});
+}, 60 * 60 * 1000).unref();
 
 app.use(express.static(path.join(__dirname, "public"), {
   extensions: ["html"],
@@ -148,16 +140,6 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ error: error?.message || "Внутренняя ошибка" });
 });
 
-const server = app.listen(port, "0.0.0.0", () => {
+app.listen(port, "0.0.0.0", () => {
   console.log(`SAT research web service listening on ${port}`);
 });
-
-async function shutdown() {
-  server.close(async () => {
-    await Promise.allSettled([queue.close(), redis.quit()]);
-    process.exit(0);
-  });
-}
-
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
