@@ -3,7 +3,6 @@ const REGIONS=["Республика Адыгея","Республика Алт�
 const e={
   region:document.querySelector("#region"),
   regions:document.querySelector("#regions"),
-  apiKey:document.querySelector("#apiKey"),
   start:document.querySelector("#startBtn"),
   cancel:document.querySelector("#cancelBtn"),
   progressCard:document.querySelector("#progressCard"),
@@ -121,9 +120,7 @@ async function start(){
   e.progressCard.hidden=false;
   e.start.disabled=true;e.cancel.disabled=false;
   try{
-    const apiKey=e.apiKey.value.trim();
-    if(!apiKey){alert("Введите OpenAI API key.");e.start.disabled=false;e.cancel.disabled=true;return;}
-    const d=await api("/api/jobs",{method:"POST",body:JSON.stringify({region,apiKey})});
+    const d=await api("/api/jobs",{method:"POST",body:JSON.stringify({region})});
     currentJobId=d.id;
     localStorage.setItem("sat_current_job",currentJobId);
     if(pollTimer)clearInterval(pollTimer);
