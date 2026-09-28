@@ -10,7 +10,7 @@ services:
     name: sat-region-research
     runtime: docker
     region: frankfurt
-    plan: starter
+    plan: 1c-2g
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
     envVars:
@@ -30,7 +30,7 @@ services:
     name: sat-region-research-worker
     runtime: docker
     region: frankfurt
-    plan: starter
+    plan: 1c-2g
     dockerfilePath: ./Dockerfile
     dockerCommand: node worker.js
     envVars:
