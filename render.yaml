@@ -1,47 +1,10 @@
 services:
-  - type: keyvalue
-    name: sat-research-queue
-    plan: free
-    region: frankfurt
-    ipAllowList: []
-    maxmemoryPolicy: noeviction
-
   - type: web
     name: sat-region-research
-    runtime: docker
+    runtime: node
     region: frankfurt
     plan: 1c-2g
-    dockerfilePath: ./Dockerfile
+    branch: render-app
+    buildCommand: npm install && npx playwright install chromium
+    startCommand: node server.js
     healthCheckPath: /health
-    envVars:
-      - key: REDIS_URL
-        fromService:
-          name: sat-research-queue
-          type: keyvalue
-          property: connectionString
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: APP_PASSWORD
-        sync: false
-      - key: NODE_ENV
-        value: production
-
-  - type: worker
-    name: sat-region-research-worker
-    runtime: docker
-    region: frankfurt
-    plan: 1c-2g
-    dockerfilePath: ./Dockerfile
-    dockerCommand: node worker.js
-    envVars:
-      - key: REDIS_URL
-        fromService:
-          name: sat-research-queue
-          type: keyvalue
-          property: connectionString
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: NODE_ENV
-        value: production
-      - key: GOOGLE_AI_MAX_TURNS
-        value: "18"
