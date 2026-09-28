@@ -1,426 +1,182 @@
-const els = {
-  noteText: document.getElementById('noteText'),
-  startRecordingBtn: document.getElementById('startRecordingBtn'),
-  stopRecordingBtn: document.getElementById('stopRecordingBtn'),
-  runPipelineBtn: document.getElementById('runPipelineBtn'),
-  resetBtn: document.getElementById('resetBtn'),
-  audioPreview: document.getElementById('audioPreview'),
-  recordingBadge: document.getElementById('recordingBadge'),
-  statusBox: document.getElementById('statusBox'),
-  backendStatusBadge: document.getElementById('backendStatusBadge'),
-  backendStatusText: document.getElementById('backendStatusText'),
-  sourceNoteOutput: document.getElementById('sourceNoteOutput'),
-  promptOutput: document.getElementById('promptOutput'),
-  metaOutput: document.getElementById('metaOutput')
+const REGIONS=["Республика Адыгея","Республика Алтай","Республика Башкортостан","Республика Бурятия","Республика Дагестан","Республика Ингушетия","Кабардино-Балкарская Республика","Республика Калмыкия","Карачаево-Черкесская Республика","Республика Карелия","Республика Коми","Республика Марий Эл","Республика Мордовия","Республика Саха (Якутия)","Республика Северная Осетия — Алания","Республика Татарстан","Республика Тыва","Удмуртская Республика","Республика Хакасия","Чеченская Республика","Чувашская Республика","Алтайский край","Забайкальский край","Камчатский край","Краснодарский край","Красноярский край","Пермский край","Приморский край","Ставропольский край","Хабаровский край","Амурская область","Архангельская область","Астраханская область","Белгородская область","Брянская область","Владимирская область","Волгоградская область","Вологодская область","Воронежская область","Ивановская область","Иркутская область","Калининградская область","Калужская область","Кемеровская область — Кузбасс","Кировская область","Костромская область","Курганская область","Курская область","Ленинградская область","Липецкая область","Магаданская область","Московская область","Мурманская область","Нижегородская область","Новгородская область","Новосибирская область","Омская область","Оренбургская область","Орловская область","Пензенская область","Псковская область","Ростовская область","Рязанская область","Самарская область","Саратовская область","Сахалинская область","Свердловская область","Смоленская область","Тамбовская область","Тверская область","Томская область","Тульская область","Тюменская область","Ульяновская область","Челябинская область","Ярославская область","Москва","Санкт-Петербург","Еврейская автономная область","Ненецкий автономный округ","Ханты-Мансийский автономный округ — Югра","Чукотский автономный округ","Ямало-Ненецкий автономный округ"];
+
+const e={
+  region:document.querySelector("#region"),
+  regions:document.querySelector("#regions"),
+  passwordWrap:document.querySelector("#passwordWrap"),
+  password:document.querySelector("#password"),
+  start:document.querySelector("#startBtn"),
+  cancel:document.querySelector("#cancelBtn"),
+  progressCard:document.querySelector("#progressCard"),
+  statusTitle:document.querySelector("#statusTitle"),
+  statusText:document.querySelector("#statusText"),
+  percent:document.querySelector("#percent"),
+  bar:document.querySelector("#progressBar"),
+  steps:document.querySelector("#steps"),
+  contactBox:document.querySelector("#contactBox"),
+  error:document.querySelector("#errorBox"),
+  resultCard:document.querySelector("#resultCard"),
+  resultSummary:document.querySelector("#resultSummary"),
+  download:document.querySelector("#downloadBtn")
 };
 
-const RAW_API_BASE_URL = String(window.APP_CONFIG?.API_BASE_URL || '').trim();
-const API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '');
-const PLACEHOLDER_API_URL = 'https://your-backend.onrender.com';
-const HEALTH_CHECK_INTERVAL_MS = 30000;
-const HEALTH_CHECK_TIMEOUT_MS = 8000;
-const PREFERRED_AUDIO_MIME_TYPES = [
-  'audio/webm;codecs=opus',
-  'audio/webm',
-  'audio/ogg;codecs=opus',
-  'audio/ogg',
-  'audio/mp4',
-  'audio/wav'
-];
+REGIONS.forEach(r=>{const o=document.createElement("option");o.value=r;e.regions.append(o)});
 
-let mediaRecorder = null;
-let mediaStream = null;
-let audioChunks = [];
-let recordedBlob = null;
-let currentAudioPreviewUrl = null;
-let healthCheckTimer = null;
-let backendConnectionState = 'checking';
+let config=null;
+let currentJobId=localStorage.getItem("sat_current_job")||"";
+let pollTimer=null;
 
-function setStatus(message, variant = 'muted') {
-  els.statusBox.className = `status-box ${variant}`;
-  els.statusBox.textContent = message;
+function headers(json=false){
+  const h={};
+  if(json) h["Content-Type"]="application/json";
+  if(e.password.value) h["x-app-password"]=e.password.value;
+  return h;
 }
 
-function setOutput(element, value) {
-  element.textContent = value && String(value).trim() ? String(value).trim() : '—';
+async function api(url,options={}){
+  const r=await fetch(url,{...options,headers:{...headers(Boolean(options.body)),...(options.headers||{})}});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(data.error||("HTTP "+r.status));
+  return data;
 }
 
-function appendToSharedNote(value) {
-  const incomingText = String(value || '').trim();
-  if (!incomingText) {
-    return '';
-  }
-
-  const currentText = String(els.noteText.value || '').trim();
-  const mergedText = currentText ? `${currentText}\n\n${incomingText}` : incomingText;
-  els.noteText.value = mergedText;
-  return mergedText;
-}
-
-function formatMeta(meta) {
-  if (!meta) {
-    return '—';
-  }
-
-  const lines = [];
-
-  if (Array.isArray(meta.placeholdersUsed) && meta.placeholdersUsed.length > 0) {
-    lines.push('Использованные placeholders:');
-    meta.placeholdersUsed.forEach((item) => lines.push(`- ${item}`));
-  }
-
-  if (Array.isArray(meta.missingButRequired) && meta.missingButRequired.length > 0) {
-    if (lines.length > 0) {
-      lines.push('');
-    }
-    lines.push('Недостающие, но обязательные поля:');
-    meta.missingButRequired.forEach((item) => lines.push(`- ${item}`));
-  }
-
-  if (Array.isArray(meta.generationNotes) && meta.generationNotes.length > 0) {
-    if (lines.length > 0) {
-      lines.push('');
-    }
-    lines.push('Служебные заметки генерации:');
-    meta.generationNotes.forEach((item) => lines.push(`- ${item}`));
-  }
-
-  return lines.length > 0 ? lines.join('\n') : '—';
-}
-
-function resetOutputs() {
-  setOutput(els.sourceNoteOutput, '—');
-  setOutput(els.promptOutput, '—');
-  setOutput(els.metaOutput, '—');
-}
-
-function stopTracks() {
-  if (mediaStream) {
-    mediaStream.getTracks().forEach((track) => track.stop());
-    mediaStream = null;
+function renderSteps(statuses){
+  if(!Array.isArray(statuses)||!statuses.length) return;
+  e.steps.innerHTML="";
+  for(const item of statuses){
+    const li=document.createElement("li");
+    if(item.status==="running") li.classList.add("active");
+    if(item.status==="done") li.classList.add("done");
+    li.innerHTML='<span class="dot">'+item.step+'</span><span>'+item.name+'</span><span class="state">'+(item.detail||({waiting:"ожидает",running:"выполняется",done:"выполнен"}[item.status]||item.status))+'</span>';
+    e.steps.append(li);
   }
 }
 
-function setRecordingState(recording) {
-  els.startRecordingBtn.disabled = recording;
-  els.stopRecordingBtn.disabled = !recording;
-  els.recordingBadge.textContent = recording ? 'Идёт запись' : 'Не записывается';
-  els.recordingBadge.classList.toggle('recording', recording);
-}
+function setProgress(p){
+  const value=Math.max(0,Math.min(100,Number(p.percent||0)));
+  e.percent.textContent=value+"%";
+  e.bar.style.width=value+"%";
+  renderSteps(p.statuses);
 
-function setBackendStatus(state, text, details) {
-  backendConnectionState = state;
-  els.backendStatusBadge.className = `connection-badge ${state}`;
-  els.backendStatusBadge.textContent = text;
-  els.backendStatusText.textContent = details;
-}
-
-function logBackendDebug(message, extra = '') {
-  const suffix = extra ? ` ${extra}` : '';
-  console.info(`[backend] ${message}${suffix}`);
-}
-
-function resolveApiBaseUrl() {
-  if (API_BASE_URL && API_BASE_URL !== PLACEHOLDER_API_URL) {
-    return API_BASE_URL;
-  }
-
-  if (window.location?.origin) {
-    return window.location.origin;
-  }
-
-  throw new Error('Сервис сейчас недоступен. Попробуйте позже.');
-}
-
-function buildApiUrl(path) {
-  const baseUrl = resolveApiBaseUrl();
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${baseUrl}${normalizedPath}`;
-}
-
-function getSupportedRecordingMimeType() {
-  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
-    return '';
-  }
-
-  return PREFERRED_AUDIO_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) || '';
-}
-
-function getFileExtensionByMimeType(mimeType) {
-  const normalizedMimeType = String(mimeType || '').split(';')[0].trim().toLowerCase();
-
-  const map = {
-    'audio/webm': 'webm',
-    'video/webm': 'webm',
-    'audio/wav': 'wav',
-    'audio/x-wav': 'wav',
-    'audio/mpeg': 'mp3',
-    'audio/mp3': 'mp3',
-    'audio/mp4': 'mp4',
-    'video/mp4': 'mp4',
-    'audio/x-m4a': 'm4a',
-    'audio/m4a': 'm4a',
-    'audio/ogg': 'ogg',
-    'audio/oga': 'oga',
-    'audio/flac': 'flac',
-    'audio/x-flac': 'flac',
-    'audio/aac': 'aac'
+  const labels={
+    starting:"Подготовка",
+    research:"Исследование",
+    dedupe:"Объединение и дедупликация",
+    google_ai:"Google AI Mode",
+    completed:"Готово",
+    cancelled:"Остановлено"
   };
+  e.statusTitle.textContent=labels[p.phase]||"Исследование";
 
-  return map[normalizedMimeType] || 'webm';
-}
-
-async function readJsonSafe(response) {
-  try {
-    return await response.json();
-  } catch (error) {
-    return null;
+  if(p.phase==="google_ai"){
+    const cur=Number(p.contactCurrent||0),total=Number(p.contactTotal||0);
+    e.statusText.textContent="Шаг 11 из 11 · поиск контактов в виртуальном браузере";
+    e.contactBox.hidden=false;
+    const s=p.contactStats||{};
+    e.contactBox.textContent=
+      "Google AI Mode: "+cur+" / "+total+
+      (p.contactCompany?" · "+p.contactCompany:"")+
+      (s.ok!==undefined?" · найдено: "+(s.ok||0)+", недоступно: "+(s.unavailable||0)+", не найдено: "+(s.notFound||0):"");
+  }else{
+    e.contactBox.hidden=true;
+    e.statusText.textContent=p.step?("Шаг "+p.step+" из 11"):"";
   }
 }
 
-async function checkBackendConnection(options = {}) {
-  const { silent = false } = options;
+async function poll(){
+  if(!currentJobId)return;
+  try{
+    const d=await api("/api/jobs/"+encodeURIComponent(currentJobId));
+    e.progressCard.hidden=false;
+    setProgress(d.progress||{});
 
-  const usingConfiguredUrl = API_BASE_URL && API_BASE_URL !== PLACEHOLDER_API_URL;
-  const resolvedBaseUrl = resolveApiBaseUrl();
-
-  if (!silent) {
-    setBackendStatus('checking', 'Проверка...', 'Проверяем подключение сервиса.');
-  }
-
-  logBackendDebug('Health check started for', resolvedBaseUrl);
-
-  try {
-    const response = await fetch(buildApiUrl('/api/health'), {
-      method: 'GET',
-      signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS)
-    });
-
-    const payload = await readJsonSafe(response);
-
-    if (!response.ok || !payload?.ok) {
-      throw new Error(payload?.error?.message || 'Backend ответил с ошибкой на health-check.');
+    if(d.state==="completed"){
+      clearInterval(pollTimer);pollTimer=null;
+      e.start.disabled=false;e.cancel.disabled=true;
+      e.resultCard.hidden=false;
+      const r=d.result||{},c=r.counts||{},g=r.contacts||{};
+      e.resultSummary.textContent=
+        "Прямые покупатели: "+(c.direct_buyers||0)+
+        ", посредники: "+(c.intermediaries||0)+
+        ", лизинг: "+(c.leasing||0)+
+        ". Google AI Mode обработал "+(g.total||0)+" компаний; контакты подтверждены для "+(g.ok||0)+".";
+      return;
     }
 
-    setBackendStatus('online', 'Онлайн', 'Сервис подключен и готов к работе.');
-    logBackendDebug('Health check success for', resolvedBaseUrl);
-
-    if (!silent) {
-      setStatus('Подключение активно. Система готова к работе.', 'success');
+    if(d.state==="failed"){
+      clearInterval(pollTimer);pollTimer=null;
+      e.start.disabled=false;e.cancel.disabled=true;
+      e.error.hidden=false;e.error.textContent="Ошибка: "+(d.error||"задание завершилось с ошибкой");
+      return;
     }
 
-    return true;
-  } catch (error) {
-    setBackendStatus(
-      usingConfiguredUrl ? 'offline' : 'config',
-      usingConfiguredUrl ? 'Недоступен' : 'Ошибка',
-      usingConfiguredUrl
-        ? 'Сервис временно недоступен. Попробуйте ещё раз чуть позже.'
-        : 'Не удалось проверить подключение сервиса.'
-    );
-    logBackendDebug('Health check failed for', `${resolvedBaseUrl} :: ${error.message}`);
+    e.start.disabled=true;e.cancel.disabled=false;
+  }catch(err){
+    e.error.hidden=false;e.error.textContent=err.message;
+  }
+}
 
-    if (!silent) {
-      setStatus('Сервис временно недоступен. Повторите попытку позже.', 'error');
+async function start(){
+  const region=e.region.value.trim();
+  if(!region){alert("Выберите или введите регион.");return;}
+  e.error.hidden=true;e.resultCard.hidden=true;e.contactBox.hidden=true;
+  e.progressCard.hidden=false;
+  e.start.disabled=true;e.cancel.disabled=false;
+  try{
+    const d=await api("/api/jobs",{method:"POST",body:JSON.stringify({region})});
+    currentJobId=d.id;
+    localStorage.setItem("sat_current_job",currentJobId);
+    if(pollTimer)clearInterval(pollTimer);
+    await poll();
+    pollTimer=setInterval(poll,2000);
+  }catch(err){
+    e.start.disabled=false;e.cancel.disabled=true;
+    e.error.hidden=false;e.error.textContent=err.message;
+  }
+}
+
+async function cancel(){
+  if(!currentJobId)return;
+  e.cancel.disabled=true;
+  try{await api("/api/jobs/"+encodeURIComponent(currentJobId)+"/cancel",{method:"POST"});}
+  catch(err){e.error.hidden=false;e.error.textContent=err.message;}
+}
+
+async function download(){
+  if(!currentJobId)return;
+  try{
+    const r=await fetch("/api/jobs/"+encodeURIComponent(currentJobId)+"/download",{headers:headers(false)});
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      throw new Error(d.error||("HTTP "+r.status));
     }
-
-    return false;
+    const b=await r.blob();
+    const cd=r.headers.get("content-disposition")||"";
+    const m=cd.match(/filename\*=UTF-8''([^;]+)/i);
+    const filename=m?decodeURIComponent(m[1]):"SAT_result.xlsx";
+    const u=URL.createObjectURL(b);
+    const a=document.createElement("a");a.href=u;a.download=filename;document.body.append(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u),1000);
+  }catch(err){
+    e.error.hidden=false;e.error.textContent=err.message;
   }
 }
 
-function startBackendHealthChecks() {
-  if (healthCheckTimer) {
-    clearInterval(healthCheckTimer);
-  }
+e.start.onclick=start;
+e.cancel.onclick=cancel;
+e.download.onclick=download;
 
-  healthCheckTimer = setInterval(() => {
-    checkBackendConnection({ silent: true });
-  }, HEALTH_CHECK_INTERVAL_MS);
-}
-
-async function uploadAndTranscribe(blob) {
-  if (!blob || blob.size <= 0) {
-    throw new Error('Записанное аудио пустое. Повторите запись ещё раз.');
-  }
-
-  const normalizedMimeType = String(blob.type || 'audio/webm').split(';')[0].trim().toLowerCase();
-  const extension = getFileExtensionByMimeType(normalizedMimeType);
-  const formData = new FormData();
-  formData.append('audio', blob, `voice-note.${extension}`);
-
-  setStatus('Загружаю аудио и запускаю транскрибацию...', 'muted');
-
-  const response = await fetch(buildApiUrl('/api/transcribe'), {
-    method: 'POST',
-    body: formData
-  });
-
-  const payload = await readJsonSafe(response);
-
-  if (!response.ok || !payload?.ok) {
-    throw new Error(payload?.error?.message || 'Не удалось транскрибировать аудио.');
-  }
-
-  const mergedNote = appendToSharedNote(payload.transcript || '');
-  setOutput(els.sourceNoteOutput, mergedNote || '—');
-  setStatus('Голосовая заметка распознана и добавлена в общее поле заметки.', 'success');
-}
-
-async function startRecording() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    throw new Error('Этот браузер не поддерживает запись аудио через MediaRecorder API.');
-  }
-
-  const isBackendAvailable = await checkBackendConnection({ silent: true });
-  if (!isBackendAvailable) {
-    throw new Error('Сервис временно недоступен. Дождитесь восстановления связи и попробуйте снова.');
-  }
-
-  audioChunks = [];
-  recordedBlob = null;
-
-  mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const selectedMimeType = getSupportedRecordingMimeType();
-  const recorderOptions = selectedMimeType ? { mimeType: selectedMimeType } : undefined;
-  mediaRecorder = new MediaRecorder(mediaStream, recorderOptions);
-
-  mediaRecorder.addEventListener('dataavailable', (event) => {
-    if (event.data && event.data.size > 0) {
-      audioChunks.push(event.data);
+(async()=>{
+  try{
+    config=await api("/api/config");
+    e.passwordWrap.hidden=!config.authRequired;
+    renderSteps((config.steps||[]).map((name,i)=>({step:i+1,name,status:"waiting",detail:"ожидает"})));
+    if(currentJobId){
+      e.progressCard.hidden=false;
+      await poll();
+      if(!pollTimer)pollTimer=setInterval(poll,2000);
     }
-  });
-
-  mediaRecorder.addEventListener('stop', async () => {
-    try {
-      const recordedMimeType = mediaRecorder.mimeType || selectedMimeType || 'audio/webm';
-      recordedBlob = new Blob(audioChunks, { type: recordedMimeType });
-
-      if (currentAudioPreviewUrl) {
-        URL.revokeObjectURL(currentAudioPreviewUrl);
-      }
-
-      currentAudioPreviewUrl = URL.createObjectURL(recordedBlob);
-      els.audioPreview.src = currentAudioPreviewUrl;
-      els.audioPreview.classList.remove('hidden');
-      await uploadAndTranscribe(recordedBlob);
-    } catch (error) {
-      setStatus(error.message, 'error');
-      await checkBackendConnection({ silent: true });
-    } finally {
-      stopTracks();
-      setRecordingState(false);
-      mediaRecorder = null;
-    }
-  });
-
-  mediaRecorder.start();
-  setRecordingState(true);
-  setStatus('Запись началась. Говорите свободно, затем нажмите «Остановить запись».', 'muted');
-}
-
-function stopRecording() {
-  if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-    return;
+  }catch(err){
+    e.error.hidden=false;e.error.textContent="Не удалось загрузить конфигурацию: "+err.message;
   }
-
-  mediaRecorder.stop();
-  setStatus('Запись остановлена. Обрабатываю аудио...', 'muted');
-}
-
-async function runPipeline() {
-  const noteText = els.noteText.value.trim();
-
-  if (!noteText) {
-    throw new Error('Добавьте заметку или надиктуйте голосовую заметку перед запуском.');
-  }
-
-  const isBackendAvailable = await checkBackendConnection({ silent: true });
-  if (!isBackendAvailable) {
-    throw new Error('Сервис временно недоступен. Невозможно отправить заметку на генерацию промпта.');
-  }
-
-  els.runPipelineBtn.disabled = true;
-  setStatus('Отправляю данные на генерацию итогового промпта...', 'muted');
-
-  const response = await fetch(buildApiUrl('/api/prompt/pipeline'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ noteText })
-  });
-
-  const payload = await readJsonSafe(response);
-
-  if (!response.ok || !payload?.ok) {
-    throw new Error(payload?.error?.message || 'Не удалось сгенерировать промпт.');
-  }
-
-  const { source, results } = payload;
-
-  setOutput(els.sourceNoteOutput, source.normalizedInput || source.noteText);
-  setOutput(els.promptOutput, results.prompt);
-  setOutput(els.metaOutput, formatMeta(results.meta));
-  setStatus('Промпт успешно сгенерирован.', 'success');
-}
-
-function resetAll() {
-  els.noteText.value = '';
-  els.audioPreview.removeAttribute('src');
-  els.audioPreview.classList.add('hidden');
-
-  if (currentAudioPreviewUrl) {
-    URL.revokeObjectURL(currentAudioPreviewUrl);
-    currentAudioPreviewUrl = null;
-  }
-
-  recordedBlob = null;
-  audioChunks = [];
-  resetOutputs();
-
-  if (backendConnectionState === 'online') {
-    setStatus('Форма очищена. Сервис доступен, можно продолжать.', 'muted');
-  } else if (backendConnectionState === 'offline') {
-    setStatus('Форма очищена. Сервис сейчас недоступен.', 'error');
-  } else if (backendConnectionState === 'config') {
-    setStatus(
-      'Форма очищена. Проверка подключения сервиса пока не завершена.',
-      'error'
-    );
-  } else {
-    setStatus('Форма очищена. Система готова к новой заметке.', 'muted');
-  }
-}
-
-els.startRecordingBtn.addEventListener('click', async () => {
-  try {
-    await startRecording();
-  } catch (error) {
-    setStatus(error.message, 'error');
-    stopTracks();
-    setRecordingState(false);
-  }
-});
-
-els.stopRecordingBtn.addEventListener('click', () => {
-  stopRecording();
-});
-
-els.runPipelineBtn.addEventListener('click', async () => {
-  try {
-    await runPipeline();
-  } catch (error) {
-    setStatus(error.message, 'error');
-  } finally {
-    els.runPipelineBtn.disabled = false;
-  }
-});
-
-els.resetBtn.addEventListener('click', () => {
-  resetAll();
-});
-
-resetOutputs();
-setBackendStatus('checking', 'Проверка...', 'Проверяем подключение сервиса.');
-checkBackendConnection();
-startBackendHealthChecks();
+})();
